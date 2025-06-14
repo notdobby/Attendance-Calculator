@@ -3,27 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attendance Calculator</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Subject-wise Attendance Calculator</title>
     <link rel="stylesheet" href="style.css">
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-6MBCJRE8TW"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  gtag('config', 'G-Q9TGEVGDFS');
-</script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-6MBCJRE8TW"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-Q9TGEVGDFS');
+    </script>
+    
+    <!-- Firebase SDK (removed auth and analytics) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <div class="navbar">
-        <a href="index.html">Home</a>
-        <a href="index.html">Calculate Overall Percentage</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="Subject.html">Calculate Subject wise</a>
+        </div>
     </div>
 
     <div class="container-box">
-        <div class="container">
-            <h1>Subject-wise Attendance</h1>
+        <div class="container signup-box">
+            <div class="header">
+                <h1>Subject-wise Attendance Calculator</h1>
+            </div>
             <input type="number" id="numSubjects" placeholder="Enter number of subjects">
             <button onclick="generateSubjects()">Generate</button>
             <div id="subjectsContainer"></div>
@@ -34,15 +42,33 @@
             </div>
         </div>
     </div>
-
+    
     <script>
+        // Your Firebase configuration (Firestore only, no auth)
+        const firebaseConfig = {
+            apiKey: "AIzaSyA9Ol4nT7MTrPogL_SzQNK5Uo_mLGGo2N0",
+            authDomain: "attendance-calculator-2c5a6.firebaseapp.com",
+            projectId: "attendance-calculator-2c5a6",
+            storageBucket: "attendance-calculator-2c5a6.firebasestorage.app",
+            messagingSenderId: "871433664506",
+            appId: "1:871433664506:web:b78a578ae28d8519161643",
+            measurementId: "G-9QG735XECM"
+        };
+
+        // Initialize Firebase (Firestore only)
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // Remove authentication and user info logic
+
         let attendanceChart;
+
         function generateSubjects() {
             let numSubjects = parseInt(document.getElementById("numSubjects").value);
             let subjectsContainer = document.getElementById("subjectsContainer");
             subjectsContainer.innerHTML = "";
             if (isNaN(numSubjects) || numSubjects <= 0) {
-                subjectsContainer.innerHTML = "<p style='color: white; text-align: center;'>Enter a valid number of subjects.</p>";
+                subjectsContainer.innerHTML = "<p style='color: #333; text-align: center;'>Enter a valid number of subjects.</p>";
                 return;
             }
             for (let i = 1; i <= numSubjects; i++) {
@@ -59,21 +85,21 @@
             }
             document.getElementById("calculateOverall").style.display = "block";
         }
-        
+
         function calculateSubjectAttendance(button) {
             let subjectBox = button.parentElement;
             let attended = parseInt(subjectBox.querySelector(".attended").value);
             let total = parseInt(subjectBox.querySelector(".total").value);
             let resultDiv = subjectBox.querySelector(".attendance-result");
             if (isNaN(attended) || isNaN(total) || total <= 0 || attended < 0 || attended > total) {
-                resultDiv.innerHTML = "<span style='color: red;'>Invalid input!</span>";
+                resultDiv.innerHTML = "<span style='color: #e53e3e;'>Invalid input!</span>";
                 return;
             }
             let percentage = (attended / total) * 100;
             resultDiv.innerHTML = `Attendance: ${percentage.toFixed(2)}%`;
             calculateOverallAttendance();
         }
-        
+
         function calculateOverallAttendance() {
             let subjectBoxes = document.querySelectorAll(".subject-box");
             let totalAttended = 0, totalClasses = 0;
@@ -93,7 +119,7 @@
             document.getElementById("overallResult").innerHTML = `Overall Attendance: ${overallPercentage.toFixed(2)}%`;
             updateGraph(labels, data);
         }
-        
+
         function updateGraph(labels, data) {
             let ctx = document.getElementById("attendanceChart").getContext("2d");
             if (attendanceChart) attendanceChart.destroy();
@@ -104,8 +130,8 @@
                     datasets: [{
                         label: "Attendance %",
                         data: data,
-                        backgroundColor: "rgba(29, 185, 84, 0.8)",
-                        borderColor: "rgba(29, 185, 84, 1)",
+                        backgroundColor: "rgba(107, 70, 193, 0.8)",
+                        borderColor: "rgba(107, 70, 193, 1)",
                         borderWidth: 1
                     }]
                 },
@@ -114,6 +140,47 @@
                 }
             });
         }
+
+        // Clear cache on page reload or back button press
+        window.onload = function() {
+            localStorage.removeItem('subjects_data');
+            const savedData = localStorage.getItem('subjects_data');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                document.getElementById('numSubjects').value = data.numSubjects || '';
+                if (data.numSubjects) {
+                    generateSubjects();
+                    const subjectBoxes = document.querySelectorAll(".subject-box");
+                    data.subjects.forEach((subject, index) => {
+                        if (index < subjectBoxes.length) {
+                            subjectBoxes[index].querySelector(".subject-name").value = subject.name || '';
+                            subjectBoxes[index].querySelector(".attended").value = subject.attended || '';
+                            subjectBoxes[index].querySelector(".total").value = subject.total || '';
+                        }
+                    });
+                }
+            }
+        };
+
+        function saveData() {
+            const numSubjects = document.getElementById('numSubjects').value;
+            const subjectBoxes = document.querySelectorAll(".subject-box");
+            const subjects = Array.from(subjectBoxes).map(box => ({
+                name: box.querySelector(".subject-name").value,
+                attended: box.querySelector(".attended").value,
+                total: box.querySelector(".total").value
+            }));
+            const data = { numSubjects, subjects };
+            localStorage.setItem('subjects_data', JSON.stringify(data));
+        }
+
+        // Save data whenever a subject is calculated
+        document.addEventListener('click', function(e) {
+            if (e.target && e.target.matches('button')) {
+                saveData();
+            }
+        });
     </script>
+
 </body>
 </html>

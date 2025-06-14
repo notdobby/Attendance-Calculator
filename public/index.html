@@ -6,7 +6,6 @@
     <title>Attendance Calculator</title>
     <link rel="stylesheet" href="style.css">
 
-    <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-6MBCJRE8TW"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
@@ -14,16 +13,24 @@
       gtag('js', new Date());
       gtag('config', 'G-Q9TGEVGDFS');
     </script>
+    
+    <!-- Firebase SDK (removed auth and analytics) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
     <div class="navbar">
-        <a href="index.html">Home</a>
-        <a href="Subject.html">Calculate Subject wise</a>
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="Subject.html">Calculate Subject wise</a>
+        </div>
     </div>
 
     <div class="container-box">
         <div class="container signup-box">
-            <h1>Attendance Calculator</h1>
+            <div class="header">
+                <h1>Attendance Calculator</h1>
+            </div>
             <input type="number" id="attended" placeholder="Lectures Attended">
             <input type="number" id="total" placeholder="Total Lectures">
             <br>
@@ -39,6 +46,44 @@
     </div>
     
     <script>
+        // Your Firebase configuration (Firestore only, no auth)
+        const firebaseConfig = {
+            apiKey: "AIzaSyA9Ol4nT7MTrPogL_SzQNK5Uo_mLGGo2N0",
+            authDomain: "attendance-calculator-2c5a6.firebaseapp.com",
+            projectId: "attendance-calculator-2c5a6",
+            storageBucket: "attendance-calculator-2c5a6.firebasestorage.app",
+            messagingSenderId: "871433664506",
+            appId: "1:871433664506:web:b78a578ae28d8519161643",
+            measurementId: "G-9QG735XECM"
+        };
+
+        // Initialize Firebase (Firestore only)
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // Remove authentication and user info logic
+
+        function loadSavedData() {
+            const savedData = localStorage.getItem('attendance_local');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+                document.getElementById('attended').value = data.attended || '';
+                document.getElementById('total').value = data.total || '';
+                document.getElementById('target').value = data.target || '';
+                if (data.attended && data.total) {
+                    calculateAttendance();
+                }
+            }
+        }
+
+     function saveData() {
+            const data = {
+                attended: document.getElementById('attended').value,
+                total: document.getElementById('total').value,
+                target: document.getElementById('target').value
+            };
+            localStorage.setItem('attendance_local', JSON.stringify(data));
+        } 
     
         function calculateAttendance() {
             let attended = parseInt(document.getElementById("attended").value);
@@ -52,6 +97,7 @@
             let percentage = (attended / total) * 100;
             document.getElementById("result").innerHTML = `Current Attendance: ${percentage.toFixed(2)}%`;
             document.getElementById("targetSection").style.display = "block";
+            saveData();
         }
 
         function calculateRequiredLectures() {
@@ -74,6 +120,15 @@
             let requiredLectures = Math.ceil(((target - currentPercentage) * total) / 100);
             
             document.getElementById("targetResult").innerHTML = `You need to attend ${requiredLectures} more lectures to reach ${target}% attendance.`;
+            saveData();
+        }
+
+        window.onload = function() {
+            localStorage.removeItem('subjects_data');
+            const savedData = localStorage.getItem('subjects_data');
+            if (savedData) {
+                const data = JSON.parse(savedData);
+            }
         }
     </script>
 
