@@ -20,28 +20,42 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-    <div class="navbar">
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="Subject.html">Calculate Subject wise</a>
-        </div>
+    <div class="top-navbar">
+        <div class="app-title">Attendance Calculator</div>
     </div>
 
-    <div class="container-box">
-        <div class="container signup-box">
-            <div class="header">
-                <h1>Subject-wise Attendance Calculator</h1>
+    <div class="secondary-navbar">
+        <a href="index.html" class="nav-tab">
+            <span class="icon">&#128214;</span> Single Subject
+        </a>
+        <a href="Subject.html" class="nav-tab active">
+            <span class="icon">&#128200;</span> Multiple Subjects
+        </a>
+    </div>
+
+    <div class="main-content">
+        <div class="container-card">
+            <h2>Multiple Subjects Attendance Calculator</h2>
+            <div class="num-subjects-control">
+                <label for="numSubjects">Number of Subjects (Max: 10 subjects)</label>
+                <div class="number-input-group">
+                    <button onclick="decrementSubjects()">-</button>
+                    <input type="number" id="numSubjects" value="0" min="0" max="10" readonly>
+                    <button onclick="incrementSubjects()">+</button>
+                </div>
             </div>
-            <input type="number" id="numSubjects" placeholder="Enter number of subjects">
-            <button onclick="generateSubjects()">Generate</button>
-            <div id="subjectsContainer"></div>
-            <button onclick="calculateOverallAttendance()" style="display: none;" id="calculateOverall">Calculate Overall Attendance</button>
-            <div id="overallResult"></div>
+            <div id="subjectsContainer" class="table-container"></div>
+            <button onclick="calculateOverallAttendance()" id="generateChartBtn" style="display: none;">Generate Attendance Chart</button>
+            <div id="overallResult" class="overall-result"></div>
             <div class="chart-container">
                 <canvas id="attendanceChart"></canvas>
             </div>
         </div>
     </div>
+
+    <footer class="footer">
+        © 2025 Attendance Calculator
+    </footer>
     
     <script>
         // Your Firebase configuration (Firestore only, no auth)
@@ -62,61 +76,169 @@
         // Remove authentication and user info logic
 
         let attendanceChart;
+        const MAX_SUBJECTS = 10;
+
+        function incrementSubjects() {
+            let numSubjectsInput = document.getElementById("numSubjects");
+            let currentNum = parseInt(numSubjectsInput.value);
+            if (currentNum < MAX_SUBJECTS) {
+                numSubjectsInput.value = currentNum + 1;
+                generateSubjects();
+            }
+        }
+
+        function decrementSubjects() {
+            let numSubjectsInput = document.getElementById("numSubjects");
+            let currentNum = parseInt(numSubjectsInput.value);
+            if (currentNum > 0) {
+                numSubjectsInput.value = currentNum - 1;
+                generateSubjects();
+            }
+        }
 
         function generateSubjects() {
             let numSubjects = parseInt(document.getElementById("numSubjects").value);
             let subjectsContainer = document.getElementById("subjectsContainer");
-            subjectsContainer.innerHTML = "";
-            if (isNaN(numSubjects) || numSubjects <= 0) {
-                subjectsContainer.innerHTML = "<p style='color: #333; text-align: center;'>Enter a valid number of subjects.</p>";
+            subjectsContainer.innerHTML = ''; // Clear existing subjects
+
+            if (numSubjects === 0) {
+                document.getElementById("generateChartBtn").style.display = "none";
+                document.getElementById("overallResult").innerHTML = '';
+                if (attendanceChart) attendanceChart.destroy();
                 return;
             }
-            for (let i = 1; i <= numSubjects; i++) {
-                let subjectDiv = document.createElement("div");
-                subjectDiv.className = "subject-box";
-                subjectDiv.innerHTML = `
-                    <input type="text" placeholder="Enter Subject Name" class="subject-name">
-                    <input type="number" placeholder="Lectures Attended" class="attended">
-                    <input type="number" placeholder="Total Lectures" class="total">
-                    <button onclick="calculateSubjectAttendance(this)">Calculate</button>
-                    <div class="attendance-result"></div>
+
+            let tableHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Subject Name</th>
+                            <th>Lectures Attended</th>
+                            <th>Total Lectures</th>
+                            <th>Attendance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+
+            for (let i = 0; i < numSubjects; i++) {
+                tableHTML += `
+                    <tr>
+                        <td><input type="text" class="subject-name" placeholder="Subject ${i + 1}"></td>
+                        <td><input type="number" class="attended" value="0" min="0"></td>
+                        <td><input type="number" class="total" value="0" min="0"></td>
+                        <td class="attendance-display">-</td>
+                    </tr>
                 `;
-                subjectsContainer.appendChild(subjectDiv);
             }
-            document.getElementById("calculateOverall").style.display = "block";
+
+            tableHTML += `
+                    </tbody>
+                </table>
+            `;
+            subjectsContainer.innerHTML = tableHTML;
+            document.getElementById("generateChartBtn").style.display = "block";
+
+            // Add event listeners for input changes to trigger calculation/save data
+            subjectsContainer.querySelectorAll('input').forEach(input => {
+                input.addEventListener('input', calculateSubjectAndOverall);
+            });
         }
 
-        function calculateSubjectAttendance(button) {
-            let subjectBox = button.parentElement;
-            let attended = parseInt(subjectBox.querySelector(".attended").value);
-            let total = parseInt(subjectBox.querySelector(".total").value);
-            let resultDiv = subjectBox.querySelector(".attendance-result");
-            if (isNaN(attended) || isNaN(total) || total <= 0 || attended < 0 || attended > total) {
-                resultDiv.innerHTML = "<span style='color: #e53e3e;'>Invalid input!</span>";
-                return;
-            }
-            let percentage = (attended / total) * 100;
-            resultDiv.innerHTML = `Attendance: ${percentage.toFixed(2)}%`;
-            calculateOverallAttendance();
+        function calculateSubjectAndOverall() {
+            calculateSubjectAttendance(); // Calculate attendance for individual subject
+            calculateOverallAttendance(); // Calculate and display overall attendance and chart
+            saveData(); // Save data on every input change
+        }
+
+        function calculateSubjectAttendance() {
+            let subjectRows = document.querySelectorAll("#subjectsContainer tbody tr");
+            subjectRows.forEach(row => {
+                let attendedInput = row.querySelector(".attended");
+                let totalInput = row.querySelector(".total");
+                let attendanceDisplay = row.querySelector(".attendance-display");
+
+                let attended = parseInt(attendedInput.value);
+                let total = parseInt(totalInput.value);
+
+                if (isNaN(attended) || isNaN(total) || total <= 0 || attended < 0) {
+                    attendanceDisplay.textContent = "Invalid";
+                    attendanceDisplay.className = "attendance-display error";
+                    return;
+                }
+                
+                if (attended > total) {
+                    attendanceDisplay.textContent = "Error";
+                    attendanceDisplay.className = "attendance-display error";
+                    return;
+                }
+
+                let percentage = (attended / total) * 100;
+                attendanceDisplay.textContent = `${percentage.toFixed(2)}%`;
+                if (percentage < 50) {
+                    attendanceDisplay.className = "attendance-display low";
+                } else if (percentage === 50) {
+                    attendanceDisplay.className = "attendance-display yellow";
+                } else {
+                    attendanceDisplay.className = "attendance-display good";
+                }
+            });
         }
 
         function calculateOverallAttendance() {
-            let subjectBoxes = document.querySelectorAll(".subject-box");
+            let subjectRows = document.querySelectorAll("#subjectsContainer tbody tr");
             let totalAttended = 0, totalClasses = 0;
             let labels = [], data = [];
-            subjectBoxes.forEach(subjectBox => {
-                let subjectName = subjectBox.querySelector(".subject-name").value || "Unnamed";
-                let attended = parseInt(subjectBox.querySelector(".attended").value);
-                let total = parseInt(subjectBox.querySelector(".total").value);
-                if (!isNaN(attended) && !isNaN(total) && total > 0 && attended >= 0 && attended <= total) {
-                    totalAttended += attended;
-                    totalClasses += total;
-                    labels.push(subjectName);
-                    data.push(((attended / total) * 100).toFixed(2));
+            let allInputsValid = true;
+
+            subjectRows.forEach(row => {
+                let subjectNameInput = row.querySelector(".subject-name");
+                let attendedInput = row.querySelector(".attended");
+                let totalInput = row.querySelector(".total");
+                let attendanceDisplay = row.querySelector(".attendance-display");
+
+                let subjectName = subjectNameInput.value || `Subject ${Array.from(subjectRows).indexOf(row) + 1}`;
+                let attended = parseInt(attendedInput.value);
+                let total = parseInt(totalInput.value);
+                
+                if (isNaN(attended) || isNaN(total) || total <= 0 || attended < 0 || attended > total) {
+                    allInputsValid = false;
+                    return;
                 }
+
+                totalAttended += attended;
+                totalClasses += total;
+                labels.push(subjectName);
+                data.push(((attended / total) * 100).toFixed(2));
             });
+
+            let overallResultDiv = document.getElementById("overallResult");
+            if (!allInputsValid) {
+                overallResultDiv.textContent = "Please fix invalid subject inputs for overall calculation.";
+                overallResultDiv.className = "overall-result error";
+                if (attendanceChart) attendanceChart.destroy();
+                return;
+            }
+
+            if (totalClasses === 0) {
+                overallResultDiv.textContent = "Enter subject data to calculate overall attendance.";
+                overallResultDiv.className = "overall-result";
+                if (attendanceChart) attendanceChart.destroy();
+                return;
+            }
+
             let overallPercentage = (totalAttended / totalClasses) * 100;
-            document.getElementById("overallResult").innerHTML = `Overall Attendance: ${overallPercentage.toFixed(2)}%`;
+            let overallClassName;
+            if (overallPercentage < 50) {
+                overallClassName = 'low';
+            } else if (overallPercentage === 50) {
+                overallClassName = 'yellow';
+            } else {
+                overallClassName = 'good';
+            }
+
+            overallResultDiv.innerHTML = `Overall Attendance: ${overallPercentage.toFixed(2)}%`;
+            overallResultDiv.className = `overall-result ${overallClassName}`; // Conditional class for overall
             updateGraph(labels, data);
         }
 
@@ -130,56 +252,92 @@
                     datasets: [{
                         label: "Attendance %",
                         data: data,
-                        backgroundColor: "rgba(107, 70, 193, 0.8)",
-                        borderColor: "rgba(107, 70, 193, 1)",
+                        backgroundColor: data.map(val => {
+                            if (val < 50) return '#F44336'; // Red
+                            if (val == 50) return '#FFC107'; // Yellow
+                            return '#4CAF50'; // Green
+                        }),
+                        borderColor: data.map(val => {
+                            if (val < 50) return '#D32F2F'; // Darker Red
+                            if (val == 50) return '#FFA000'; // Darker Yellow
+                            return '#388E3C'; // Darker Green
+                        }),
                         borderWidth: 1
                     }]
                 },
                 options: {
-                    scales: { y: { beginAtZero: true, max: 100 } }
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'bottom',
+                            labels: {
+                                generateLabels: function(chart) {
+                                    return [{
+                                        text: 'Attendance Percentage',
+                                        fillStyle: '#6b46c1',
+                                        strokeStyle: '#6b46c1',
+                                        lineWidth: 1
+                                    }];
+                                }
+                            }
+                        }
+                    }
                 }
             });
         }
 
-        // Clear cache on page reload or back button press
-        window.onload = function() {
-            localStorage.removeItem('subjects_data');
+        function loadSavedData() {
             const savedData = localStorage.getItem('subjects_data');
             if (savedData) {
                 const data = JSON.parse(savedData);
-                document.getElementById('numSubjects').value = data.numSubjects || '';
-                if (data.numSubjects) {
-                    generateSubjects();
-                    const subjectBoxes = document.querySelectorAll(".subject-box");
-                    data.subjects.forEach((subject, index) => {
-                        if (index < subjectBoxes.length) {
-                            subjectBoxes[index].querySelector(".subject-name").value = subject.name || '';
-                            subjectBoxes[index].querySelector(".attended").value = subject.attended || '';
-                            subjectBoxes[index].querySelector(".total").value = subject.total || '';
-                        }
-                    });
-                }
+                document.getElementById('numSubjects').value = data.numSubjects || 0;
+                generateSubjects(); // Generate inputs first
+
+                // Populate inputs with saved data
+                const subjectRows = document.querySelectorAll("#subjectsContainer tbody tr");
+                data.subjects.forEach((subject, index) => {
+                    if (index < subjectRows.length) {
+                        let row = subjectRows[index];
+                        row.querySelector(".subject-name").value = subject.name || '';
+                        row.querySelector(".attended").value = subject.attended || 0;
+                        row.querySelector(".total").value = subject.total || 0;
+                    }
+                });
+                calculateSubjectAndOverall(); // Recalculate to display results and graph
             }
-        };
+        }
 
         function saveData() {
             const numSubjects = document.getElementById('numSubjects').value;
-            const subjectBoxes = document.querySelectorAll(".subject-box");
-            const subjects = Array.from(subjectBoxes).map(box => ({
-                name: box.querySelector(".subject-name").value,
-                attended: box.querySelector(".attended").value,
-                total: box.querySelector(".total").value
+            const subjectRows = document.querySelectorAll("#subjectsContainer tbody tr");
+            const subjects = Array.from(subjectRows).map(row => ({
+                name: row.querySelector(".subject-name").value,
+                attended: row.querySelector(".attended").value,
+                total: row.querySelector(".total").value
             }));
             const data = { numSubjects, subjects };
             localStorage.setItem('subjects_data', JSON.stringify(data));
         }
 
-        // Save data whenever a subject is calculated
-        document.addEventListener('click', function(e) {
-            if (e.target && e.target.matches('button')) {
-                saveData();
+        // Clear cache on page reload or back button press for this page (multiple subjects)
+        window.onpageshow = function(event) {
+            if (event.persisted) {
+                // Page is being restored from cache, clear local storage for fresh start
+                localStorage.removeItem('subjects_data');
             }
-        });
+            loadSavedData();
+        };
+        
+        // Initial generation of subjects (if any saved data)
+        window.onload = loadSavedData;
     </script>
 
 </body>

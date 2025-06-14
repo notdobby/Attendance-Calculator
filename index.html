@@ -19,31 +19,57 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
-    <div class="navbar">
-        <div class="nav-links">
-            <a href="index.html">Home</a>
-            <a href="Subject.html">Calculate Subject wise</a>
+    <div class="top-navbar">
+        <div class="app-title">Attendance Calculator</div>
+    </div>
+
+    <div class="secondary-navbar">
+        <a href="index.html" class="nav-tab active">
+            <span class="icon">&#128214;</span> Single Subject
+        </a>
+        <a href="Subject.html" class="nav-tab">
+            <span class="icon">&#128200;</span> Multiple Subjects
+        </a>
+    </div>
+
+    <div class="main-content">
+        <div class="container-card">
+            <h2>Single Subject Attendance Calculator</h2>
+            <div class="input-group">
+                <div class="input-field">
+                    <label for="attended">Lectures Attended</label>
+                    <input type="number" id="attended" placeholder="Enter number">
+                </div>
+                <div class="input-field">
+                    <label for="total">Total Lectures</label>
+                    <input type="number" id="total" placeholder="Enter number">
+                </div>
+            </div>
+            <button onclick="calculateAttendance()">Calculate</button>
+            
+            <div id="resultSection" class="result-section" style="display: none;">
+                <div class="result-label">% Current Attendance</div>
+                <div class="result-value" id="currentAttendance"></div>
+            </div>
+
+            <div class="target-section">
+                <h3>Target Calculation</h3>
+                <div class="input-field">
+                    <label for="target">Target Attendance Percentage</label>
+                    <input type="number" id="target" placeholder="Enter percentage (0-100)">
+                </div>
+                <button onclick="calculateRequiredLectures()">Calculate Additional Lectures</button>
+                <div class="result-section" id="targetResultSection" style="display: none;">
+                    <div class="result-label">&#9432; Required Additional Lectures</div>
+                    <div class="result-value" id="targetResult"></div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <div class="container-box">
-        <div class="container signup-box">
-            <div class="header">
-                <h1>Attendance Calculator</h1>
-            </div>
-            <input type="number" id="attended" placeholder="Lectures Attended">
-            <input type="number" id="total" placeholder="Total Lectures">
-            <br>
-            <button onclick="calculateAttendance()">Calculate</button>
-            <div class="result" id="result"></div>
-            <div id="targetSection" style="display: none;">
-                <input type="number" id="target" placeholder="Target Percentage">
-                <br>
-                <button onclick="calculateRequiredLectures()">Calculate Required Lectures</button>
-                <div class="result" id="targetResult"></div>
-            </div>
-        </div>
-    </div>
+    <footer class="footer">
+        © 2025 Attendance Calculator
+    </footer>
     
     <script>
         // Your Firebase configuration (Firestore only, no auth)
@@ -71,7 +97,10 @@
                 document.getElementById('total').value = data.total || '';
                 document.getElementById('target').value = data.target || '';
                 if (data.attended && data.total) {
-                    calculateAttendance();
+                    calculateAttendance(); // Recalculate attendance to display
+                }
+                if (data.target) {
+                    calculateRequiredLectures(); // Recalculate required lectures
                 }
             }
         }
@@ -88,15 +117,37 @@
         function calculateAttendance() {
             let attended = parseInt(document.getElementById("attended").value);
             let total = parseInt(document.getElementById("total").value);
+            let currentAttendanceDiv = document.getElementById("currentAttendance");
+            let resultSection = document.getElementById("resultSection");
             
             if (isNaN(attended) || isNaN(total) || total <= 0 || attended < 0 || attended > total) {
-                document.getElementById("result").innerHTML = "Please enter valid numbers";
+                currentAttendanceDiv.textContent = "Please enter valid numbers";
+                currentAttendanceDiv.className = "result-value error"; // Apply error style
+                resultSection.style.display = "block";
+                document.getElementById("targetResultSection").style.display = "none"; // Hide target section if input is invalid
                 return;
             }
             
             let percentage = (attended / total) * 100;
-            document.getElementById("result").innerHTML = `Current Attendance: ${percentage.toFixed(2)}%`;
-            document.getElementById("targetSection").style.display = "block";
+            let status, className;
+
+            if (percentage < 50) {
+                status = "Low Attendance";
+                className = "low";
+            } else if (percentage === 50) {
+                status = "Borderline Attendance";
+                className = "yellow"; // New class for yellow
+            } else {
+                status = "Good Standing";
+                className = "good";
+            }
+
+            currentAttendanceDiv.innerHTML = `${percentage.toFixed(2)}% <span class="status ${className}">${status}</span>`;
+            currentAttendanceDiv.className = "result-value " + className; // Apply status class
+            resultSection.style.display = "block";
+            document.getElementById("target").value = ""; // Clear target field on new attendance calculation
+            document.getElementById("targetResultSection").style.display = "none"; // Hide target result
+
             saveData();
         }
 
@@ -104,31 +155,71 @@
             let attended = parseInt(document.getElementById("attended").value);
             let total = parseInt(document.getElementById("total").value);
             let target = parseFloat(document.getElementById("target").value);
+            let targetResultDiv = document.getElementById("targetResult");
+            let targetResultSection = document.getElementById("targetResultSection");
             
+            if (isNaN(attended) || isNaN(total) || total <= 0 || attended < 0 || attended > total) {
+                targetResultDiv.textContent = "Please enter valid lectures data first.";
+                targetResultDiv.className = "result-value error";
+                targetResultSection.style.display = "block";
+                return;
+            }
+
             if (isNaN(target) || target <= 0 || target > 100) {
-                document.getElementById("targetResult").innerHTML = "Please enter a valid target percentage (0-100)";
+                targetResultDiv.textContent = "Please enter a valid target percentage (0-100).";
+                targetResultDiv.className = "result-value error";
+                targetResultSection.style.display = "block";
                 return;
             }
             
             let currentPercentage = (attended / total) * 100;
             
             if (currentPercentage >= target) {
-                document.getElementById("targetResult").innerHTML = "You have already achieved your target attendance!";
+                targetResultDiv.innerHTML = "You've already reached your target percentage!";
+                targetResultDiv.className = "result-value good"; // Green for good standing
+                targetResultSection.style.display = "block";
+                saveData();
                 return;
             }
             
-            let requiredLectures = Math.ceil(((target - currentPercentage) * total) / 100);
-            
-            document.getElementById("targetResult").innerHTML = `You need to attend ${requiredLectures} more lectures to reach ${target}% attendance.`;
+            // Corrected formula for required lectures to reach target
+            let requiredLectures = Math.ceil((total * target / 100) - attended); 
+            if (requiredLectures <= 0) {
+                targetResultDiv.innerHTML = "You've already reached your target percentage!";
+                targetResultDiv.className = "result-value good";
+            } else {
+                targetResultDiv.innerHTML = `You need to attend ${requiredLectures} more lectures to reach ${target}% attendance.`;
+                targetResultDiv.className = "result-value low"; // Red for needing more lectures
+            }
+            targetResultSection.style.display = "block";
             saveData();
         }
 
+        // Add event listeners for input changes to clear results
+        document.getElementById('attended').addEventListener('input', clearResults);
+        document.getElementById('total').addEventListener('input', clearResults);
+        document.getElementById('target').addEventListener('input', clearTargetResult);
+
+        function clearResults() {
+            document.getElementById('resultSection').style.display = 'none';
+            document.getElementById('targetResultSection').style.display = 'none';
+            document.getElementById('currentAttendance').textContent = '';
+            document.getElementById('currentAttendance').className = 'result-value'; // Reset class
+            document.getElementById('targetResult').textContent = '';
+            document.getElementById('targetResult').className = 'result-value'; // Reset class
+        }
+
+        function clearTargetResult() {
+            document.getElementById('targetResultSection').style.display = 'none';
+            document.getElementById('targetResult').textContent = '';
+            document.getElementById('targetResult').className = 'result-value'; // Reset class
+        }
+
+
         window.onload = function() {
-            localStorage.removeItem('subjects_data');
-            const savedData = localStorage.getItem('subjects_data');
-            if (savedData) {
-                const data = JSON.parse(savedData);
-            }
+            // No longer clearing subjects_data as this is index.html
+            // localStorage.removeItem('subjects_data'); 
+            loadSavedData();
         }
     </script>
 
